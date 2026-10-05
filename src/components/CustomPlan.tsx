@@ -9,7 +9,7 @@ import TextBlockAnimation from "@/components/ui/text-block-animation";
 const groups = serviceOrder.flatMap((slug) => {
   const service = serviceAddons[slug];
   if (!service.sections) {
-    return [{ id: slug, label: service.label, items: service.items, accent: service.accent, onAccent: service.onAccent }];
+    return [{ id: slug, label: service.label, items: service.items, accent: service.accent, onAccent: service.onAccent, note: service.note }];
   }
   return service.sections.map((section) => ({
     id: section.id,
@@ -17,6 +17,7 @@ const groups = serviceOrder.flatMap((slug) => {
     items: section.items,
     accent: section.accent,
     onAccent: section.onAccent,
+    note: section.note,
   }));
 });
 
@@ -51,6 +52,9 @@ export default function CustomPlan() {
                 {group.label}
               </h3>
               <CatalogGrid items={group.items} accent={group.accent} onAccent={group.onAccent} />
+              {group.note && (
+                <p className="mt-3 text-[0.7rem] leading-relaxed text-[var(--color-ink-soft)]">{group.note}</p>
+              )}
             </div>
           ))}
         </div>

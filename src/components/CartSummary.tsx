@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { currency } from "@/lib/currency";
+import { currency, formatPrice } from "@/lib/currency";
 import { useCart } from "./CartProvider";
 
 /** Sticky sidebar next to the catalogs: a live view of the whole shared cart. */
@@ -30,7 +30,7 @@ export default function CartSummary({ title = "Tu carrito" }: { title?: string }
               >
                 <span className="truncate text-[var(--color-ink-soft)]">{item.title}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  <span className="font-medium">{item.price === undefined ? "A cotizar" : currency.format(item.price)}</span>
+                  <span className="font-medium">{item.price === undefined ? "A cotizar" : formatPrice({ ...item, price: item.price })}</span>
                   <button
                     type="button"
                     onClick={() => remove(item.id)}
@@ -59,7 +59,8 @@ export default function CartSummary({ title = "Tu carrito" }: { title?: string }
           {currency.format(total)}
         </motion.span>
       </div>
-      {hasQuote && <p className="mt-2 text-[0.7rem] text-[var(--color-ink-soft)]">Plan por cotizar, no incluido en el total.</p>}
+      <p className="mt-2 text-[0.7rem] text-[var(--color-ink-soft)]">Valores en dólares (USD) + IVA.</p>
+      {hasQuote && <p className="mt-1 text-[0.7rem] text-[var(--color-ink-soft)]">Plan por cotizar, no incluido en el total.</p>}
 
       <button
         type="button"

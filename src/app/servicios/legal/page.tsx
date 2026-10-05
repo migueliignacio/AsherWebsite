@@ -61,6 +61,7 @@ export default function LegalPage() {
           title={section.title}
           description={section.description}
           highlights={section.highlights}
+          note={section.note}
           items={section.items}
           accent={section.accent}
           onAccent={section.onAccent}

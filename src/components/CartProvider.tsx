@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { catalogById, type CatalogEntry } from "@/data/catalog";
-import { currency } from "@/lib/currency";
+import { currency, formatPrice } from "@/lib/currency";
 
 // The cart stores only catalog ids in localStorage; titles and prices are
 // always resolved from the catalog, so they can't go stale or be tampered with.
@@ -95,9 +95,9 @@ export function useCart() {
 
 /** Plain-text order summary, prefilled into the contact form at checkout. */
 export function cartMessage(items: CatalogEntry[], total: number, hasQuote: boolean) {
-  const lines = items.map((i) => `${i.title} (${i.price === undefined ? "a cotizar" : currency.format(i.price)})`);
+  const lines = items.map((i) => `${i.title} (${i.price === undefined ? "a cotizar" : formatPrice({ ...i, price: i.price })})`);
   const suffix = hasQuote ? " + plan a cotizar" : "";
-  return `Pedido desde el carrito: ${lines.join(" · ")}. Total servicios: ${currency.format(total)}${suffix}.`;
+  return `Pedido desde el carrito: ${lines.join(" · ")}. Total servicios: ${currency.format(total)} + IVA${suffix}.`;
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {

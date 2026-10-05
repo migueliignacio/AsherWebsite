@@ -7,6 +7,8 @@ export interface CatalogEntry {
   description: string;
   /** Undefined = "A cotizar" (plans until pricing is set). */
   price?: number;
+  unit?: string;
+  priceFrom?: boolean;
   kind: "plan" | "service";
   area: string;
 }

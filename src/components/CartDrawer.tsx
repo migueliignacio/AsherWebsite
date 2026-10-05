@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { cartMessage, useCart } from "./CartProvider";
 import { useLeadModal } from "./LeadModalProvider";
-import { currency } from "@/lib/currency";
+import { currency, formatPrice } from "@/lib/currency";
 
 export default function CartDrawer() {
   const { items, count, total, hasQuote, remove, clear, isOpen, setOpen } = useCart();
@@ -70,6 +70,7 @@ export default function CartDrawer() {
             </span>
             <span className="font-display text-xl font-medium tracking-tight">{currency.format(total)}</span>
           </div>
+          <p className="mb-2 text-xs text-[var(--color-ink-soft)]">Valores en dólares (USD) + IVA.</p>
           {hasQuote && (
             <p className="mb-2 text-xs text-[var(--color-ink-soft)]">
               El plan se cotiza contigo: el total no lo incluye todavía.
@@ -105,7 +106,7 @@ function CartGroup({
   onRemove,
 }: {
   title: string;
-  entries: { id: string; title: string; price?: number; area: string }[];
+  entries: { id: string; title: string; price?: number; unit?: string; priceFrom?: boolean; area: string }[];
   onRemove: (id: string) => void;
 }) {
   return (
@@ -119,7 +120,7 @@ function CartGroup({
               <span className="block text-xs text-[var(--color-ink-soft)]">{e.area}</span>
             </span>
             <span className="flex shrink-0 items-center gap-3">
-              <span className="font-medium">{e.price === undefined ? "A cotizar" : currency.format(e.price)}</span>
+              <span className="text-right font-medium">{e.price === undefined ? "A cotizar" : formatPrice({ ...e, price: e.price })}</span>
               <button
                 type="button"
                 onClick={() => onRemove(e.id)}

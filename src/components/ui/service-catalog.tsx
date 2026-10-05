@@ -15,6 +15,8 @@ export interface ServiceCatalogProps {
   id?: string;
   description?: string;
   highlights?: string[];
+  /** Fine print under the catalog. */
+  note?: string;
   className?: string;
 }
 
@@ -28,6 +30,7 @@ export function ServiceCatalog({
   id,
   description,
   highlights,
+  note,
   className,
 }: ServiceCatalogProps) {
   return (
@@ -63,6 +66,7 @@ export function ServiceCatalog({
       <div className="grid gap-10 md:grid-cols-3 md:gap-16">
         <div className="md:col-span-2">
           <CatalogGrid items={items} accent={accent} onAccent={onAccent} />
+          {note && <p className="mt-6 max-w-2xl text-[0.7rem] leading-relaxed text-[var(--color-ink-soft)]">{note}</p>}
         </div>
         <div className="md:col-span-1">
           <CartSummary />
