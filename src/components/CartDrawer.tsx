@@ -16,7 +16,7 @@ import { useLeadModal } from "./LeadModalProvider";
 import { currency, formatPrice } from "@/lib/currency";
 
 export default function CartDrawer() {
-  const { items, count, total, hasQuote, remove, clear, isOpen, setOpen } = useCart();
+  const { tokens, items, count, total, hasQuote, remove, clear, isOpen, setOpen } = useCart();
   const { openModal } = useLeadModal();
 
   const plans = items.filter((i) => i.kind === "plan");
@@ -24,7 +24,7 @@ export default function CartDrawer() {
 
   const checkout = () => {
     setOpen(false);
-    openModal("carrito", cartMessage(items, total, hasQuote));
+    openModal("Carrito", cartMessage(items, total, hasQuote), tokens);
   };
 
   return (

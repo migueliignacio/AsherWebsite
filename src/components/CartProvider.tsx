@@ -1,17 +1,18 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { catalogById, planId, type CatalogEntry } from "@/data/catalog";
-import { planItemById, type PlanItem } from "@/data/plans";
-import { currency, formatPrice } from "@/lib/currency";
+import { catalogById, planId } from "@/data/catalog";
+import { planItemById } from "@/data/plans";
+import { REMOVED, cartItems, cartTotal, isValidToken, orderLines, tokenPlan, type CartItem } from "@/lib/order";
+import { currency } from "@/lib/currency";
+
+export type { CartItem };
 
 // The cart stores only catalog ids (plus "sin:<planItemId>" tokens for items
 // taken out of a plan) in localStorage; titles and prices are always resolved
 // from the catalog, so they can't go stale or be tampered with.
 const STORAGE_KEY = "asher-cart";
 const EMPTY: string[] = [];
-/** Prefix of a token meaning "this plan item was taken out of its plan". */
-const REMOVED = "sin:";
 
 let memoryRaw: string | null = null;
 let storageOk = true;
@@ -38,12 +39,6 @@ function writeRaw(raw: string) {
       storageOk = false;
     }
   }
-}
-
-function isValidToken(x: unknown): x is string {
-  if (typeof x !== "string") return false;
-  if (x.startsWith(REMOVED)) return x.slice(REMOVED.length) in planItemById;
-  return x in catalogById;
 }
 
 function getIds(): string[] {
@@ -81,18 +76,16 @@ const getServerIds = () => EMPTY;
 
 const isPlanToken = (x: string) => x.startsWith(REMOVED) || catalogById[x]?.kind === "plan";
 
-/** The plan a removed-item token belongs to, as a cart id. */
-const tokenPlan = (x: string) => planId(planItemById[x.slice(REMOVED.length)].planId);
 
 /** Drops a plan from the id list together with its removed-item tokens. */
 function withoutPlan(ids: string[], cartPlanId: string): string[] {
   return ids.filter((x) => x !== cartPlanId && !(x.startsWith(REMOVED) && tokenPlan(x) === cartPlanId));
 }
 
-/** A cart line. A customized plan carries the items taken out, already deducted from its price. */
-export type CartItem = CatalogEntry & { removed?: PlanItem[] };
 
 interface CartContextValue {
+  /** The raw cart (ids + removal tokens), sent with an order so the server can price it. */
+  tokens: string[];
   items: CartItem[];
   count: number;
   /** Sum of the priced items. */
@@ -122,32 +115,16 @@ export function useCart() {
 
 /** Plain-text order summary, prefilled into the contact form at checkout. */
 export function cartMessage(items: CartItem[], total: number, hasQuote: boolean) {
-  const lines = items.map((i) => {
-    const price = i.price === undefined ? "a cotizar" : formatPrice({ ...i, price: i.price });
-    const removed = i.removed?.length ? `, sin: ${i.removed.map((r) => r.title).join(", ")}` : "";
-    return `${i.title} (${price}${removed})`;
-  });
   const suffix = hasQuote ? " + plan a cotizar" : "";
-  return `Pedido desde el carrito: ${lines.join(" · ")}. Total servicios: ${currency.format(total)} + IVA${suffix}.`;
+  return `Pedido desde el carrito: ${orderLines(items).join(" · ")}. Total: ${currency.format(total)} + IVA${suffix}.`;
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const ids = useSyncExternalStore(subscribe, getIds, getServerIds);
   const [isOpen, setOpen] = useState(false);
 
-  const items = useMemo<CartItem[]>(() => {
-    const removed = ids.filter((x) => x.startsWith(REMOVED));
-    return ids
-      .filter((x) => !x.startsWith(REMOVED))
-      .map((id) => {
-        const entry = catalogById[id];
-        const out = removed.filter((x) => tokenPlan(x) === id).map((x) => planItemById[x.slice(REMOVED.length)]);
-        if (entry.kind !== "plan" || !out.length || entry.price === undefined) return entry;
-        const price = Math.round((entry.price - out.reduce((sum, r) => sum + r.price, 0)) * 100) / 100;
-        return { ...entry, price: Math.max(0, price), removed: out };
-      });
-  }, [ids]);
-  const total = useMemo(() => items.reduce((sum, i) => sum + (i.price ?? 0), 0), [items]);
+  const items = useMemo(() => cartItems(ids), [ids]);
+  const total = useMemo(() => cartTotal(items), [items]);
   const hasQuote = items.some((i) => i.price === undefined);
 
   const has = useCallback((id: string) => ids.includes(id), [ids]);
@@ -179,8 +156,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clear = useCallback(() => setIds([]), []);
 
   const value = useMemo(
-    () => ({ items, count: items.length, total, hasQuote, has, toggle, remove, clear, isRemoved, togglePlanItem, isOpen, setOpen }),
-    [items, total, hasQuote, has, toggle, remove, clear, isRemoved, togglePlanItem, isOpen]
+    () => ({ tokens: ids, items, count: items.length, total, hasQuote, has, toggle, remove, clear, isRemoved, togglePlanItem, isOpen, setOpen }),
+    [ids, items, total, hasQuote, has, toggle, remove, clear, isRemoved, togglePlanItem, isOpen]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

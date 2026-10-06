@@ -34,7 +34,17 @@ export const areaCatalog: Record<PlanArea, { slug: string; section?: string }> =
   Web: { slug: "digital-web" },
 };
 
-export const planAreas: PlanArea[] = ["Marketing", "Legal", "Branding", "Marca", "Web"];
+/** Same order the site sells its services in (serviceOrder): Branding, Digital Web, Legal, Marketing. */
+export const planAreas: PlanArea[] = ["Branding", "Web", "Legal", "Marca", "Marketing"];
+
+/** How each area is labelled to visitors, matching the /servicios pages. */
+export const areaLabel: Record<PlanArea, string> = {
+  Branding: "Branding",
+  Web: "Digital Web",
+  Legal: "Legal · Empresas",
+  Marca: "Legal · Marcas",
+  Marketing: "Marketing",
+};
 
 /**
  * The price sheets list each Branding service at its list price, but the

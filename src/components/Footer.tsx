@@ -10,6 +10,7 @@ import {
   WhatsappIcon,
 } from "./SocialIcons";
 import { brand } from "@/data/asher";
+import { useSubscribe } from "@/lib/use-subscribe";
 
 const SOCIAL_LINKS = [
   {
@@ -46,6 +47,8 @@ const itemVariants = {
 };
 
 export default function Footer() {
+  const subscribe = useSubscribe("Newsletter (pie de página)");
+
   return (
     <motion.footer
       initial="hidden"
@@ -170,25 +173,31 @@ export default function Footer() {
             </span>
           </h2>
 
-          <form className="mt-5 flex items-center gap-2 rounded-full bg-[var(--color-violet-deep)] p-1.5 pl-5">
+          <form onSubmit={subscribe.onSubmit} className="mt-5 flex items-center gap-2 rounded-full bg-[var(--color-violet-deep)] p-1.5 pl-5">
             <label htmlFor="footer-email" className="sr-only">
               Correo electrónico
             </label>
             <input
               id="footer-email"
+              name="email"
               type="email"
               required
-              placeholder="Correo electrónico"
+              disabled={subscribe.status === "done" || subscribe.status === "sending"}
+              placeholder={subscribe.status === "done" ? "¡Gracias! Ya estás en la lista." : "Correo electrónico"}
               className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-[var(--color-bg)]/45"
             />
             <button
               type="submit"
+              disabled={subscribe.status === "done" || subscribe.status === "sending"}
               data-cursor="expand"
-              className="shrink-0 rounded-full bg-[var(--color-bg)]/15 px-5 py-2.5 text-xs font-medium uppercase tracking-[0.1em] transition-colors duration-300 hover:bg-[var(--color-bg)] hover:text-[var(--color-violet)]"
+              className="shrink-0 rounded-full bg-[var(--color-bg)]/15 px-5 py-2.5 text-xs font-medium uppercase tracking-[0.1em] transition-colors duration-300 hover:bg-[var(--color-bg)] hover:text-[var(--color-violet)] disabled:opacity-60"
             >
-              Unirme <span aria-hidden="true">→</span>
+              {subscribe.status === "sending" ? "Enviando…" : subscribe.status === "done" ? "Listo ✓" : "Unirme"} <span aria-hidden="true">→</span>
             </button>
           </form>
+          {subscribe.status === "error" && (
+            <p className="mt-2 text-xs text-[var(--color-bg)]/70">No pudimos registrarte. Intenta de nuevo.</p>
+          )}
         </motion.div>
       </motion.div>
 

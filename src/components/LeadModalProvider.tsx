@@ -6,7 +6,8 @@ import { X, Loader2 } from "lucide-react";
 import { brand } from "@/data/asher";
 
 interface LeadModalContextValue {
-  openModal: (origen?: string, mensaje?: string) => void;
+  /** `carrito`: the cart's tokens when the modal finalizes an order (priced server-side). */
+  openModal: (origen?: string, mensaje?: string, carrito?: string[]) => void;
 }
 
 const LeadModalContext = createContext<LeadModalContextValue | null>(null);
@@ -23,13 +24,15 @@ const CAMPOS_INIT = { nombre: "", celular: "", correo: "", mensaje: "", consenti
 export function LeadModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [origen, setOrigen] = useState<string | undefined>(undefined);
+  const [carrito, setCarrito] = useState<string[] | undefined>(undefined);
   const [campos, setCampos] = useState(CAMPOS_INIT);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
 
-  const openModal = useCallback((o?: string, mensaje?: string) => {
+  const openModal = useCallback((o?: string, mensaje?: string, items?: string[]) => {
     setCampos({ ...CAMPOS_INIT, mensaje: mensaje ?? "" });
+    setCarrito(items?.length ? items : undefined);
     setErrors({});
     setEnviado(false);
     setOrigen(o);
@@ -66,6 +69,7 @@ export function LeadModalProvider({ children }: { children: ReactNode }) {
           correo: campos.correo,
           mensaje: campos.mensaje,
           seccion_origen: origen,
+          ...(carrito ? { carrito } : {}),
         }),
       });
       setEnviado(true);

@@ -6,6 +6,15 @@ import Lenis from "lenis";
 export default function SmoothScroll() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Phones and tablets already scroll smoothly (and Lenis never smooths
+    // touch anyway); skipping it there saves a per-frame loop that made
+    // phones stutter. Anchor links fall back to the browser.
+    if (window.matchMedia("(hover: none), (pointer: coarse)").matches) {
+      document.documentElement.style.scrollBehavior = "smooth";
+      return () => {
+        document.documentElement.style.scrollBehavior = "";
+      };
+    }
 
     const lenis = new Lenis({
       duration: 1.15,

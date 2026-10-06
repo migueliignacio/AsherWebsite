@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { plans, planAreas, areaCatalog, type Plan, type PlanItem } from "@/data/plans";
+import { plans, planAreas, areaCatalog, areaLabel, type Plan, type PlanItem } from "@/data/plans";
 import { planId } from "@/data/catalog";
 import { serviceAddons, type ServiceAddon } from "@/data/service-addons";
 import { currency, formatPrice } from "@/lib/currency";
@@ -53,7 +53,7 @@ function PlanCustomizer({ plan }: { plan: Plan }) {
           if (!areaItems.length) return null;
           return (
             <div key={area}>
-              <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-[var(--color-ink-soft)]">{area}</p>
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-[var(--color-ink-soft)]">{areaLabel[area]}</p>
               <ul className="space-y-2">
                 {areaItems.map((item) => {
                   const removed = isRemoved(item.id);
@@ -107,13 +107,18 @@ function PlanCustomizer({ plan }: { plan: Plan }) {
         })}
       </div>
 
-      <div className="mt-8 flex flex-col gap-3 border-t border-[var(--color-line)] pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-[var(--color-ink-soft)]">
-          ¿Quieres sumar algo más? Agrégalo desde{" "}
-          <a href="#plan-personalizado" className="underline underline-offset-4">
-            el catálogo completo
-          </a>
-          .
+      <p className="mt-8 border-t border-[var(--color-line)] pt-6 text-xs text-[var(--color-ink-soft)]">
+        ¿Quieres sumar algo más? Agrégalo desde{" "}
+        <a href="#plan-personalizado" className="underline underline-offset-4">
+          el catálogo completo
+        </a>
+        .
+      </p>
+
+      {/* On phones this bar floats while scrolling the list (above the ASHI and impact badges). */}
+      <div className="sticky bottom-20 z-30 mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-line)] bg-[var(--color-bg)] p-3 pl-5 shadow-[0_10px_30px_-12px_rgba(11,25,86,0.35)] md:static md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+        <p className="font-display text-lg font-medium tracking-tight md:hidden">
+          {currency.format(price)} <span className="text-xs font-normal text-[var(--color-ink-soft)]">+ IVA</span>
         </p>
         <button
           type="button"
@@ -122,9 +127,10 @@ function PlanCustomizer({ plan }: { plan: Plan }) {
             setOpen(true);
           }}
           data-cursor="expand"
-          className="rounded-full bg-[var(--color-ink)] px-6 py-3 text-xs font-medium uppercase tracking-[0.1em] text-white transition-transform duration-300 hover:-translate-y-0.5"
+          className="shrink-0 rounded-full bg-[var(--color-ink)] px-5 py-3 text-xs font-medium uppercase tracking-[0.1em] text-white transition-transform duration-300 hover:-translate-y-0.5 md:ml-auto md:px-6"
         >
-          Añadir al carrito · {currency.format(price)}
+          <span className="md:hidden">Añadir al carrito</span>
+          <span className="hidden md:inline">Añadir al carrito · {currency.format(price)}</span>
         </button>
       </div>
     </div>
@@ -134,7 +140,17 @@ function PlanCustomizer({ plan }: { plan: Plan }) {
 export default function Tiers() {
   const { has, toggle, items } = useCart();
   const [customizing, setCustomizing] = useState<string | null>(null);
-  const editing = plans.find((p) => p.id === customizing);
+  const editingIndex = plans.findIndex((p) => p.id === customizing);
+  const editing = plans[editingIndex];
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Opening "Personalizar" takes the visitor to the panel (on phones it sits
+  // right under the chosen card, far below the fold).
+  useEffect(() => {
+    if (!customizing) return;
+    const frame = requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => cancelAnimationFrame(frame);
+  }, [customizing]);
 
   return (
     <section id="planes" className="border-t border-[var(--color-line)] px-5 py-28 md:px-10 md:py-40">
@@ -149,7 +165,7 @@ export default function Tiers() {
       </TextBlockAnimation>
 
       <div className="grid gap-6 md:grid-cols-3 md:gap-5">
-        {plans.map((plan) => {
+        {plans.map((plan, index) => {
           const id = planId(plan.id);
           const inCart = has(id);
           const cartLine = items.find((i) => i.id === id);
@@ -159,7 +175,9 @@ export default function Tiers() {
             <article
               key={plan.id}
               data-reveal
-              className={`flex flex-col rounded-3xl p-8 md:p-10 ${
+              // Phones: cards take even slots so the open panel can sit right after its card.
+              style={{ "--o": index * 2 } as CSSProperties}
+              className={`order-[var(--o)] flex flex-col rounded-3xl p-8 md:order-none md:p-10 ${
                 dark ? "bg-[var(--color-violet)] text-[var(--color-bg)]" : "border border-[var(--color-line)] bg-[var(--color-bg)]"
               }`}
             >
@@ -190,7 +208,7 @@ export default function Tiers() {
                   if (!areaItems.length) return null;
                   return (
                     <li key={area}>
-                      <span className="font-medium">{area}:</span> {areaItems.map((i) => i.title).join(", ")}.
+                      <span className="font-medium">{areaLabel[area]}:</span> {areaItems.map((i) => i.title).join(", ")}.
                     </li>
                   );
                 })}
@@ -229,24 +247,24 @@ export default function Tiers() {
             </article>
           );
         })}
-      </div>
 
-      <AnimatePresence initial={false}>
-        {editing && (
-          <motion.div
-            key={editing.id}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="pt-8">
+        <AnimatePresence initial={false}>
+          {editing && (
+            <motion.div
+              key={editing.id}
+              ref={panelRef}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              style={{ "--o": editingIndex * 2 + 1 } as CSSProperties}
+              className="order-[var(--o)] scroll-mt-24 md:order-last md:col-span-3 md:mt-3"
+            >
               <PlanCustomizer plan={editing} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </section>
   );
 }

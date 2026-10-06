@@ -1,5 +1,5 @@
 import { brand, routes, phases, disciplines, valueProps } from "@/data/asher";
-import { plans, planAreas } from "@/data/plans";
+import { plans, planAreas, areaLabel } from "@/data/plans";
 import { serviceAddons, serviceOrder } from "@/data/service-addons";
 import { formatPrice } from "@/lib/currency";
 
@@ -35,7 +35,7 @@ function plansText(): string {
         .map((area) => {
           const items = plan.items.filter((i) => i.area === area);
           if (!items.length) return "";
-          return `  ${area}: ${items.map((i) => (i.price ? `${i.title} (${formatPrice(i)})` : `${i.title} (incluido)`)).join("; ")}`;
+          return `  ${areaLabel[area]}: ${items.map((i) => (i.price ? `${i.title} (${formatPrice(i)})` : `${i.title} (incluido)`)).join("; ")}`;
         })
         .filter(Boolean)
         .join("\n");

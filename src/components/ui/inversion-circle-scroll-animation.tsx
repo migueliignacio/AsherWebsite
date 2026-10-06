@@ -62,18 +62,28 @@ function HeroSection() {
       setViewH(window.innerHeight);
       setViewW(window.innerWidth);
     };
-    const update = () => {
+    // Scroll events fire many times per frame on phones; read layout at most
+    // once per frame, and clamp past the animation's end (2 × viewport) so
+    // scrolling the rest of the page doesn't re-render this section at all.
+    let frame = 0;
+    const read = () => {
+      frame = 0;
       const track = trackRef.current;
       if (!track) return;
-      setScrollY(Math.max(0, -track.getBoundingClientRect().top));
+      const max = 2 * window.innerHeight + 2;
+      setScrollY(Math.round(Math.min(max, Math.max(0, -track.getBoundingClientRect().top))));
+    };
+    const update = () => {
+      if (!frame) frame = requestAnimationFrame(read);
     };
 
     measure();
-    update();
+    read();
 
     window.addEventListener("resize", measure, { passive: true });
     window.addEventListener("scroll", update, { passive: true });
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", update);
     };

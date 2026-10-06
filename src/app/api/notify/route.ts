@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { brand } from "@/data/asher";
 import { getSupabase } from "@/lib/supabase-server";
+import { cartItems, cartTotal, orderLines, orderText, type CartItem } from "@/lib/order";
+import { currency } from "@/lib/currency";
 
 /**
  * Runs on every submission from the lead modal ("Cuéntanos un poco sobre
- * ti" — see LeadModalProvider.tsx) and the 3-step diagnóstico (see
- * DiagnosticoQuiz.tsx): emails the team, saves a row in Supabase (see
- * supabase/schema.sql for the table) and sends a WhatsApp alert.
+ * ti" — see LeadModalProvider.tsx), the 3-step diagnóstico (see
+ * DiagnosticoQuiz.tsx), cart checkouts (an order, priced here from the
+ * cart's ids — see lib/order.ts) and newsletter sign-ups: emails the team,
+ * saves a row in Supabase (see supabase/schema.sql) and sends a WhatsApp alert.
  *
  * All three are independent and best-effort — missing env vars just skip
  * that channel; the visitor's submission is never blocked by one failing.
@@ -71,7 +74,7 @@ function row(label: string, value: string, opts?: { accent?: boolean }): string 
 }
 
 /** Modal "Cuéntanos un poco sobre ti" (Navbar / Hero / Contacto). */
-function buildLeadHtml(data: Record<string, unknown>): string {
+function buildLeadHtml(data: Record<string, unknown>, order: CartItem[]): string {
   const rows =
     row("Nombre", String(data.nombre ?? "")) +
     row("Celular / WhatsApp", String(data.celular ?? ""), { accent: true }) +
@@ -100,7 +103,31 @@ function buildLeadHtml(data: Record<string, unknown>): string {
           </td>
         </tr>`;
 
-  return emailShell("🆕 Nuevo registro", rows, mensaje + whatsapp);
+  const total = `${currency.format(cartTotal(order))} + IVA${order.some((i) => i.price === undefined) ? " (+ plan a cotizar)" : ""}`;
+  const pedido = order.length
+    ? `
+        <tr>
+          <td style="padding:8px 32px 0;">
+            <p style="margin:0 0 12px;color:#d8cbb8;font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;">Pedido</p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f1d63;border:1px solid #26346f;border-radius:10px;">
+              ${orderLines(order)
+                .map((line) => `<tr><td style="padding:12px 16px;border-bottom:1px solid #26346f;color:#f7f4ed;font-size:14px;">${esc(line)}</td></tr>`)
+                .join("")}
+              <tr><td style="padding:14px 16px;color:#d8cbb8;font-size:16px;font-weight:700;">Total: ${esc(total)}</td></tr>
+            </table>
+          </td>
+        </tr>`
+    : "";
+
+  return emailShell(order.length ? "🛒 Nuevo pedido" : "🆕 Nuevo registro", rows, pedido + mensaje + whatsapp);
+}
+
+/** "Mantente cerca" (footer) and the /insights newsletter. */
+function buildNewsletterHtml(data: Record<string, unknown>): string {
+  const rows =
+    row("Correo electrónico", String(data.correo ?? ""), { accent: true }) +
+    row("Sección de origen", String(data.seccion_origen ?? ""));
+  return emailShell("📬 Nueva suscripción", rows, "");
 }
 
 /** "Haz tu diagnóstico en 3 pasos" (ver DiagnosticoQuiz.tsx). */
@@ -136,13 +163,22 @@ function buildDiagnosticoHtml(data: Record<string, unknown>): string {
   return emailShell("📋 Nuevo diagnóstico", rows, respuestasHtml);
 }
 
-async function sendEmail(data: Record<string, unknown>, isDiagnostico: boolean) {
+type Kind = "contacto" | "pedido" | "diagnostico" | "newsletter";
+
+const isEmail = (value: unknown): value is string => typeof value === "string" && /^\S+@\S+\.\S+$/.test(value);
+
+async function sendEmail(data: Record<string, unknown>, kind: Kind, order: CartItem[]) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { sent: false, reason: "missing_api_key" };
 
-  const subject = isDiagnostico
-    ? `📋 Diagnóstico: ${data.nombre_negocio ?? "Sin nombre"}`
-    : `🆕 Nuevo registro: ${data.nombre ?? "Sin nombre"}`;
+  const subject = {
+    diagnostico: `📋 Diagnóstico: ${data.nombre_negocio ?? "Sin nombre"}`,
+    pedido: `🛒 Nuevo pedido: ${data.nombre ?? "Sin nombre"} — ${currency.format(cartTotal(order))} + IVA`,
+    newsletter: `📬 Nueva suscripción: ${data.correo ?? ""}`,
+    contacto: `🆕 Nuevo registro: ${data.nombre ?? "Sin nombre"}`,
+  }[kind];
+  const html =
+    kind === "diagnostico" ? buildDiagnosticoHtml(data) : kind === "newsletter" ? buildNewsletterHtml(data) : buildLeadHtml(data, order);
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -152,12 +188,14 @@ async function sendEmail(data: Record<string, unknown>, isDiagnostico: boolean) 
     },
     body: JSON.stringify({
       // Resend's onboarding@resend.dev sender only delivers to the Resend
-      // account owner; set RESEND_FROM (e.g. "ASHER <notificaciones@asherconsulting.ec>")
-      // once the domain is verified in Resend so every recipient gets it.
+      // account owner; RESEND_FROM (e.g. "ASHER <notificaciones@asherconsulting.ec>")
+      // uses the verified domain so every recipient gets it.
       from: process.env.RESEND_FROM || `${brand.name} <onboarding@resend.dev>`,
       to: brand.notifyEmails,
+      // "Reply" in the inbox answers the person who registered, when they left an email.
+      ...(isEmail(data.correo) ? { reply_to: data.correo } : {}),
       subject,
-      html: isDiagnostico ? buildDiagnosticoHtml(data) : buildLeadHtml(data),
+      html,
     }),
   });
 
@@ -169,23 +207,32 @@ async function sendEmail(data: Record<string, unknown>, isDiagnostico: boolean) 
 }
 
 /** Plain-text summary for WhatsApp (WhatsApp formatting: *bold*). */
-function buildWhatsappText(data: Record<string, unknown>, isDiagnostico: boolean): string {
-  const lines = isDiagnostico
-    ? [
-        "*📋 Nuevo diagnóstico — ASHER*",
-        `*Negocio:* ${data.nombre_negocio ?? "—"}`,
-        `*Contacto:* ${data.contacto ?? "—"}`,
-        ...(Array.isArray(data.respuestas)
-          ? (data.respuestas as { pregunta: string; respuesta: string }[]).map((r) => `• ${r.pregunta}: ${r.respuesta}`)
+function buildWhatsappText(data: Record<string, unknown>, kind: Kind, order: CartItem[]): string {
+  let lines: string[];
+  if (kind === "diagnostico") {
+    lines = [
+      "*📋 Nuevo diagnóstico — ASHER*",
+      `*Negocio:* ${data.nombre_negocio ?? "—"}`,
+      `*Contacto:* ${data.contacto ?? "—"}`,
+      ...(Array.isArray(data.respuestas)
+        ? (data.respuestas as { pregunta: string; respuesta: string }[]).map((r) => `• ${r.pregunta}: ${r.respuesta}`)
+        : []),
+    ];
+  } else if (kind === "newsletter") {
+    lines = ["*📬 Nueva suscripción — ASHER*", `*Correo:* ${data.correo ?? "—"}`];
+  } else {
+    lines = [
+      kind === "pedido" ? "*🛒 Nuevo pedido — ASHER*" : "*🆕 Nuevo registro — ASHER*",
+      `*Nombre:* ${data.nombre ?? "—"}`,
+      `*Celular:* ${data.celular ?? "—"}`,
+      `*Correo:* ${data.correo || "—"}`,
+      ...(order.length
+        ? ["*Pedido:*", ...orderLines(order).map((l) => `• ${l}`), `*Total:* ${currency.format(cartTotal(order))} + IVA`]
+        : data.mensaje
+          ? [`*Mensaje:* ${data.mensaje}`]
           : []),
-      ]
-    : [
-        "*🆕 Nuevo registro — ASHER*",
-        `*Nombre:* ${data.nombre ?? "—"}`,
-        `*Celular:* ${data.celular ?? "—"}`,
-        `*Correo:* ${data.correo || "—"}`,
-        ...(data.mensaje ? [`*Mensaje:* ${data.mensaje}`] : []),
-      ];
+    ];
+  }
   lines.push(`*Origen:* ${data.seccion_origen ?? "—"}`, fecha());
   return lines.join("\n");
 }
@@ -194,14 +241,14 @@ function buildWhatsappText(data: Record<string, unknown>, isDiagnostico: boolean
  * WhatsApp alert to the team's own number through CallMeBot's free API
  * (the number must first activate it — CALLMEBOT_PHONE + CALLMEBOT_APIKEY).
  */
-async function sendWhatsapp(data: Record<string, unknown>, isDiagnostico: boolean) {
+async function sendWhatsapp(data: Record<string, unknown>, kind: Kind, order: CartItem[]) {
   const phone = process.env.CALLMEBOT_PHONE;
   const apiKey = process.env.CALLMEBOT_APIKEY;
   if (!phone || !apiKey) return { sent: false, reason: "missing_callmebot_config" };
 
   const url = new URL("https://api.callmebot.com/whatsapp.php");
   url.searchParams.set("phone", phone);
-  url.searchParams.set("text", buildWhatsappText(data, isDiagnostico));
+  url.searchParams.set("text", buildWhatsappText(data, kind, order));
   url.searchParams.set("apikey", apiKey);
 
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -212,32 +259,52 @@ async function sendWhatsapp(data: Record<string, unknown>, isDiagnostico: boolea
   return { sent: true };
 }
 
-async function saveToDatabase(data: Record<string, unknown>, isDiagnostico: boolean) {
+async function saveToDatabase(data: Record<string, unknown>, kind: Kind, order: CartItem[]) {
   const supabase = getSupabase();
   if (!supabase) return { saved: false, reason: "missing_supabase_config" };
 
+  // The leads table only knows 'contacto' and 'diagnostico' (see
+  // supabase/schema.sql): orders and newsletter sign-ups are 'contacto' rows,
+  // told apart by seccion_origen and, for orders, the PEDIDO block.
+  const mensaje = order.length ? `PEDIDO\n${orderText(order)}` : typeof data.mensaje === "string" ? data.mensaje : "";
+
   const { error } = await supabase.from("leads").insert({
-    tipo: isDiagnostico ? "diagnostico" : "contacto",
-    nombre: isDiagnostico ? data.nombre_negocio : data.nombre,
-    celular: isDiagnostico ? data.contacto : data.celular,
-    correo: isDiagnostico ? null : data.correo || null,
-    mensaje: isDiagnostico ? null : data.mensaje || null,
+    tipo: kind === "diagnostico" ? "diagnostico" : "contacto",
+    nombre: kind === "diagnostico" ? data.nombre_negocio : kind === "newsletter" ? "Suscripción" : data.nombre,
+    celular: kind === "diagnostico" ? data.contacto : kind === "newsletter" ? null : data.celular,
+    correo: kind === "diagnostico" ? null : data.correo || null,
+    mensaje: mensaje || null,
     seccion_origen: data.seccion_origen ?? null,
-    respuestas: isDiagnostico ? data.respuestas ?? null : null,
+    respuestas: kind === "diagnostico" ? data.respuestas ?? null : null,
   });
   if (error) return { saved: false, reason: error.message };
   return { saved: true };
 }
 
+/** Caps every string field so nobody can push huge payloads into the inbox or the table. */
+function clean(raw: unknown): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    data[key] = typeof value === "string" ? value.slice(0, 2000) : value;
+  }
+  return data;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const data = await req.json();
-    const isDiagnostico = data.tipo === "diagnostico";
+    const data = clean(await req.json());
+    const order = Array.isArray(data.carrito) ? cartItems(data.carrito.slice(0, 100)) : [];
+    const kind: Kind =
+      data.tipo === "diagnostico" ? "diagnostico" : data.tipo === "newsletter" ? "newsletter" : order.length ? "pedido" : "contacto";
+
+    if (kind === "newsletter" && !isEmail(data.correo)) {
+      return NextResponse.json({ ok: false, reason: "invalid_email" }, { status: 400 });
+    }
 
     const [emailResult, dbResult, whatsappResult] = await Promise.allSettled([
-      sendEmail(data, isDiagnostico),
-      saveToDatabase(data, isDiagnostico),
-      sendWhatsapp(data, isDiagnostico),
+      sendEmail(data, kind, order),
+      saveToDatabase(data, kind, order),
+      sendWhatsapp(data, kind, order),
     ]);
 
     return NextResponse.json({
