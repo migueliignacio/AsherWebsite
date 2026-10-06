@@ -32,15 +32,19 @@ function rateLimited(ip: string): boolean {
   return recent.length > LIMIT;
 }
 
-/** GEMINI_MODEL first (if set), then free models from newest/fastest to most available. */
+/**
+ * GEMINI_MODEL first (if set), then free models. The Flash-Lite models go
+ * first: they answer in a few seconds and are far less often "overloaded";
+ * the full Flash models think before answering and can take 10 s+.
+ */
 function modelChain(): string[] {
   const chain = [
     process.env.GEMINI_MODEL,
-    "gemini-flash-latest",
     "gemini-flash-lite-latest",
-    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
     "gemini-2.0-flash",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
   ];
   return [...new Set(chain.filter((m): m is string => Boolean(m)))];
 }
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
   // sometimes for long stretches. Walk a chain of free models instead of
   // waiting: the first one that answers wins. A model that doesn't exist for
   // this key (404) or is out of quota (429) is simply skipped too.
-  const deadline = Date.now() + 25000;
+  const deadline = Date.now() + 28000;
   let lastError = "request_failed";
   for (const model of modelChain()) {
     const remaining = deadline - Date.now();
@@ -90,15 +94,15 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body,
-          signal: AbortSignal.timeout(Math.min(12000, remaining)),
+          signal: AbortSignal.timeout(Math.min(9000, remaining)),
         }
       );
       if (!response.ok) {
         const detail = await response.text().catch(() => "");
         console.error("ASHI Gemini error", model, response.status, detail.slice(0, 200));
         lastError = `gemini_${response.status}`;
-        // A bad key or request won't get better with another model.
-        if (response.status === 400 || response.status === 401 || response.status === 403) break;
+        // A rejected key won't work with another model either.
+        if (response.status === 401 || response.status === 403) break;
         continue;
       }
       const data = await response.json();
