@@ -33,18 +33,17 @@ function rateLimited(ip: string): boolean {
 }
 
 /**
- * GEMINI_MODEL first (if set), then free models. The Flash-Lite models go
- * first: they answer in a few seconds and are far less often "overloaded";
- * the full Flash models think before answering and can take 10 s+.
+ * GEMINI_MODEL first (if set), then free models in the order that proved
+ * most reliable in production (Oct 2026): 2.5 Flash answers in a few
+ * seconds, while the "-latest" aliases were often overloaded or slow.
+ * (gemini-2.0-flash and gemini-2.5-flash-lite were retired: 404.)
  */
 function modelChain(): string[] {
   const chain = [
     process.env.GEMINI_MODEL,
-    "gemini-flash-lite-latest",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-    "gemini-flash-latest",
     "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
   ];
   return [...new Set(chain.filter((m): m is string => Boolean(m)))];
 }
@@ -72,11 +71,20 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return NextResponse.json({ reply: FALLBACK, error: "missing_api_key" });
 
-  const body = JSON.stringify({
-    system_instruction: { parts: [{ text: ashiSystemPrompt() }] },
-    contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-    generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
-  });
+  const system_instruction = { parts: [{ text: ashiSystemPrompt() }] };
+  const contents = messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+  // Short factual answers don't need "thinking"; on 2.5 Flash it can be
+  // switched off (budget 0), which makes replies several seconds faster.
+  const bodyFor = (model: string) =>
+    JSON.stringify({
+      system_instruction,
+      contents,
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 600,
+        ...(model.startsWith("gemini-2.5-flash") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      },
+    });
 
   // Gemini's free tier regularly answers 503 "high demand" for a given model,
   // sometimes for long stretches. Walk a chain of free models instead of
@@ -93,7 +101,7 @@ export async function POST(req: NextRequest) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body,
+          body: bodyFor(model),
           signal: AbortSignal.timeout(Math.min(9000, remaining)),
         }
       );
