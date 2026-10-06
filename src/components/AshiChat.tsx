@@ -16,9 +16,19 @@ const GREETING: ChatMessage = {
 
 const SUGGESTIONS = ["¿Qué servicios ofrecen?", "¿Cuánto cuesta registrar mi marca?", "Quiero una página web"];
 
-/** Renders **bold**, links and site paths (/servicios/...) inside a reply. */
+/** Renders **bold**, [text](url) links, bare links and site paths (/servicios/...) inside a reply. */
 function renderText(text: string): ReactNode {
-  return text.split(/(\*\*[^*]+\*\*|https?:\/\/\S+|\/[a-z][\w\-/#]*)/g).map((part, i) => {
+  // A site path only counts at the start or after a space/parenthesis, so "y/o" stays text.
+  return text.split(/(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|https?:\/\/\S+|(?<=^|[\s(])\/[a-z#][\w\-/#]*)/g).map((part, i) => {
+    const md = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+    if (md) {
+      const href = md[2];
+      return (
+        <a key={i} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className="underline underline-offset-2">
+          {md[1].replace(/\*\*/g, "")}
+        </a>
+      );
+    }
     if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={i}>{part.slice(2, -2)}</strong>;
     if (/^(https?:\/\/|\/[a-z])/.test(part)) {
       const href = part.replace(/[).,;:]+$/, "");

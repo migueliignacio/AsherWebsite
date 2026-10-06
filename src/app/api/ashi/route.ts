@@ -32,6 +32,19 @@ function rateLimited(ip: string): boolean {
   return recent.length > LIMIT;
 }
 
+/** GEMINI_MODEL first (if set), then free models from newest/fastest to most available. */
+function modelChain(): string[] {
+  const chain = [
+    process.env.GEMINI_MODEL,
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+  ];
+  return [...new Set(chain.filter((m): m is string => Boolean(m)))];
+}
+
 function parseMessages(body: unknown): ChatMessage[] | null {
   const raw = (body as { messages?: unknown })?.messages;
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -55,36 +68,50 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return NextResponse.json({ reply: FALLBACK, error: "missing_api_key" });
 
-  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: ashiSystemPrompt() }] },
-          contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-          generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
-        }),
-        signal: AbortSignal.timeout(25000),
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: ashiSystemPrompt() }] },
+    contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+  });
+
+  // Gemini's free tier regularly answers 503 "high demand" for a given model,
+  // sometimes for long stretches. Walk a chain of free models instead of
+  // waiting: the first one that answers wins. A model that doesn't exist for
+  // this key (404) or is out of quota (429) is simply skipped too.
+  const deadline = Date.now() + 25000;
+  let lastError = "request_failed";
+  for (const model of modelChain()) {
+    const remaining = deadline - Date.now();
+    if (remaining < 2000) break;
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body,
+          signal: AbortSignal.timeout(Math.min(12000, remaining)),
+        }
+      );
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        console.error("ASHI Gemini error", model, response.status, detail.slice(0, 200));
+        lastError = `gemini_${response.status}`;
+        // A bad key or request won't get better with another model.
+        if (response.status === 400 || response.status === 401 || response.status === 403) break;
+        continue;
       }
-    );
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("ASHI Gemini error", response.status, detail.slice(0, 300));
-      return NextResponse.json({ reply: FALLBACK, error: `gemini_${response.status}` });
+      const data = await response.json();
+      const reply: string = (data?.candidates?.[0]?.content?.parts ?? [])
+        .map((p: { text?: string }) => p.text ?? "")
+        .join("")
+        .trim();
+      if (reply) return NextResponse.json({ reply });
+      lastError = "empty_reply";
+    } catch (error) {
+      console.error("ASHI request failed", model, error instanceof Error ? error.name : error);
+      lastError = "request_failed";
     }
-
-    const data = await response.json();
-    const reply: string = (data?.candidates?.[0]?.content?.parts ?? [])
-      .map((p: { text?: string }) => p.text ?? "")
-      .join("")
-      .trim();
-    return NextResponse.json({ reply: reply || FALLBACK });
-  } catch (error) {
-    console.error("ASHI request failed", error);
-    return NextResponse.json({ reply: FALLBACK, error: "request_failed" });
   }
+  return NextResponse.json({ reply: FALLBACK, error: lastError });
 }
