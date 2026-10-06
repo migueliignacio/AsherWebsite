@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import { routes, disciplines } from "@/data/asher";
@@ -22,6 +22,16 @@ export default function Routes() {
   const [clicked, setClicked] = useState(false);
   const requested = useDiagnosticoRequested();
   const showQuiz = clicked || requested;
+
+  // "Empezar diagnóstico" also takes the visitor down to the quiz it opens.
+  const quizRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!clicked) return;
+    const frame = requestAnimationFrame(() => {
+      quizRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [clicked]);
 
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
@@ -99,7 +109,7 @@ export default function Routes() {
             href="/contacto"
             data-reveal
             data-cursor="view"
-            className="group relative flex items-center justify-between gap-6 overflow-hidden border-b border-[var(--color-line)] py-8 md:py-10"
+            className="group relative flex items-center justify-between gap-6 overflow-hidden border-b border-[var(--color-line)] py-8 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,24rem)_auto] md:gap-10 md:py-10"
             style={{ "--hover-text": route.hoverText } as React.CSSProperties}
           >
             <span
@@ -122,7 +132,7 @@ export default function Routes() {
               </span>
             </span>
 
-            <span className="relative z-10 hidden max-w-xs text-sm text-[var(--color-ink-soft)] transition-colors duration-500 group-hover:text-[color:var(--hover-text)] md:block">
+            <span className="relative z-10 hidden text-left text-base leading-snug text-[var(--color-ink-soft)] transition-colors duration-500 group-hover:text-[color:var(--hover-text)] md:block">
               {route.description}
             </span>
 
@@ -172,7 +182,7 @@ export default function Routes() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="overflow-hidden"
             >
-              <div className="pt-16 md:pt-24">
+              <div ref={quizRef} className="scroll-mt-24 pt-16 md:pt-24">
                 <DiagnosticoQuiz />
               </div>
             </motion.div>

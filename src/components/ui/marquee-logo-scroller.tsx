@@ -13,8 +13,11 @@ interface Logo {
   };
 }
 
-interface MarqueeLogoScrollerProps extends React.HTMLAttributes<HTMLDivElement> {
-  title: string;
+interface MarqueeLogoScrollerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+  /** Plain-text title, used for the section's accessible name. */
+  label: string;
+  /** The visible heading; defaults to `label`. */
+  title?: React.ReactNode;
   description: string;
   logos: Logo[];
   speed?: "normal" | "slow" | "fast";
@@ -34,26 +37,30 @@ const DURATIONS = {
  * so the loop has no seam; it pauses on hover.
  */
 const MarqueeLogoScroller = React.forwardRef<HTMLDivElement, MarqueeLogoScrollerProps>(
-  ({ title, description, logos, speed = "normal", repeat = 4, className, ...props }, ref) => {
+  ({ label, title = label, description, logos, speed = "normal", repeat = 4, className, ...props }, ref) => {
     const half = Array.from({ length: repeat }, () => logos).flat();
 
     return (
       <section
         ref={ref}
-        aria-label={title}
+        aria-label={label}
         className={cn(
           "w-full overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)]",
           className
         )}
         {...props}
       >
-        <div className="p-6 md:p-8 lg:p-10">
-          <div className="grid grid-cols-1 gap-6 border-b border-[var(--color-line)] pb-6 md:pb-8 lg:grid-cols-[3fr_2fr] lg:gap-8">
+        <div className="px-6 pt-10 md:px-10 md:pt-16 lg:pt-20">
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 border-b border-[var(--color-line)] pb-10 text-center md:gap-5 md:pb-14">
             <TextBlockAnimation blockColor="#0b1956">
-              <h2 className="font-display text-balance text-3xl font-medium tracking-tight md:text-4xl">{title}</h2>
+              <h2 className="font-display text-balance text-4xl font-medium leading-[1.05] tracking-tight md:text-6xl">
+                {title}
+              </h2>
             </TextBlockAnimation>
-            <TextBlockAnimation blockColor="#8fb0e3" duration={0.5} delay={0.15} className="self-start lg:justify-self-end">
-              <p className="text-balance text-[var(--color-ink-soft)]">{description}</p>
+            <TextBlockAnimation blockColor="#8fb0e3" duration={0.5} delay={0.15}>
+              <p className="max-w-xl text-balance text-base leading-relaxed text-[var(--color-ink-soft)] md:text-lg">
+                {description}
+              </p>
             </TextBlockAnimation>
           </div>
         </div>

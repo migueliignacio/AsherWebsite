@@ -27,7 +27,19 @@ export default function ClientLogos() {
   return (
     <div className="px-5 py-16 md:px-10 md:py-24">
       <MarqueeLogoScroller
-        title="Marcas que han confiado en Asher"
+        label="Marcas que han confiado en Asher"
+        title={
+          <>
+            {/* The ASHER wordmark's typeface (Inter, uppercase), slightly
+                spaced. The left margin stands in for the space, which the
+                line-splitting reveal animation drops; the negative right
+                margin cancels the trailing letter-spacing so it stays centered. */}
+            Marcas que han confiado en
+            <span className="ml-[0.28em] mr-[-0.1em] inline-block whitespace-nowrap font-[family-name:var(--font-body)] font-medium uppercase tracking-[0.1em]">
+              Asher
+            </span>
+          </>
+        }
         description="Negocios que han confiado en ASHER para mover su marca."
         logos={marcas}
         speed="normal"

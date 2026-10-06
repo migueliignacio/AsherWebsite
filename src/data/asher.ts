@@ -107,8 +107,9 @@ export const phases: Phase[] = [
   },
   {
     index: "05",
-    title: "Medición",
-    description: "Seguimos resultados reales y ajustamos lo que haga falta.",
+    title: "Seguimiento",
+    description:
+      "Medimos los resultados, analizamos y ajustamos mediante estrategias focalizadas.",
   },
   {
     index: "06",

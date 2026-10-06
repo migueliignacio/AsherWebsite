@@ -152,7 +152,10 @@ async function sendEmail(data: Record<string, unknown>, isDiagnostico: boolean) 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `${brand.name} <onboarding@resend.dev>`,
+      // Resend's onboarding@resend.dev sender only delivers to the Resend
+      // account owner; set RESEND_FROM (e.g. "ASHER <notificaciones@asherconsulting.ec>")
+      // once the domain is verified in Resend so every recipient gets it.
+      from: process.env.RESEND_FROM || `${brand.name} <onboarding@resend.dev>`,
       to: brand.notifyEmails,
       subject,
       html: isDiagnostico ? buildDiagnosticoHtml(data) : buildLeadHtml(data),

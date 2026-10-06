@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Smartphone, Globe, Scale, CheckCircle2, Megaphone } from "lucide-react";
 
@@ -59,7 +59,46 @@ function LayoutAnimation() {
   );
 }
 
-function SpeedIndicator({ label, value }: { label: string; value: string }) {
+/**
+ * A card's description: the first two lines, plus "Leer más" when there is
+ * more, so text is never cut mid-sentence by the card's height.
+ */
+function CardDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, expanded]);
+
+  return (
+    <>
+      <p ref={ref} className={`text-[#a9b4d6] text-sm mt-1 ${expanded ? "" : "line-clamp-2"}`}>
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
+          data-cursor="expand"
+          className="mt-1 text-xs font-medium uppercase tracking-[0.1em] text-white underline-offset-4 hover:underline"
+        >
+          {expanded ? "Leer menos" : "Leer más"}
+        </button>
+      )}
+    </>
+  );
+}
+
+function SpeedIndicator({ value }: { value: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,7 +107,7 @@ function SpeedIndicator({ label, value }: { label: string; value: string }) {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-4">
+    <div className="flex flex-col items-center justify-center h-full gap-3">
       <div className="h-10 flex items-center justify-center overflow-hidden relative w-full">
         <AnimatePresence mode="wait">
           {loading ? (
@@ -92,7 +131,6 @@ function SpeedIndicator({ label, value }: { label: string; value: string }) {
           )}
         </AnimatePresence>
       </div>
-      <span className="text-sm text-[#a9b4d6]">{label}</span>
       <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden">
         <motion.div
           className="h-full bg-white rounded-full"
@@ -252,7 +290,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
           {eyebrow}
         </motion.p>
 
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[200px]">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[minmax(200px,auto)]">
           <motion.div
             className="md:col-span-2 md:row-span-2 bg-[#0b1956] border border-[#26346f] rounded-xl p-8 flex flex-col hover:border-[#3d4d8f] transition-colors cursor-pointer overflow-hidden"
             initial={{ opacity: 0, y: 30 }}
@@ -265,7 +303,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
             </div>
             <div className="mt-4">
               <h3 className="font-serif text-xl text-white font-medium">{c1.title}</h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c1.description}</p>
+              <CardDescription text={c1.description} />
             </div>
           </motion.div>
 
@@ -282,7 +320,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
             </div>
             <div className="mt-4">
               <h3 className="font-serif text-xl text-white font-medium">{c2.title}</h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c2.description}</p>
+              <CardDescription text={c2.description} />
             </div>
           </motion.div>
 
@@ -304,7 +342,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
                 <Globe className="w-5 h-5" />
                 {c3.title}
               </h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c3.description}</p>
+              <CardDescription text={c3.description} />
             </div>
           </motion.div>
 
@@ -317,11 +355,11 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
             whileHover={{ scale: 0.98 }}
           >
             <div className="flex-1">
-              <SpeedIndicator label={c4.title} value={speedValue} />
+              <SpeedIndicator value={speedValue} />
             </div>
             <div className="mt-4">
               <h3 className="font-serif text-xl text-white font-medium">{c4.title}</h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c4.description}</p>
+              <CardDescription text={c4.description} />
             </div>
           </motion.div>
 
@@ -341,7 +379,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
                 <Lock className="w-5 h-5" />
                 {c5.title}
               </h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c5.description}</p>
+              <CardDescription text={c5.description} />
             </div>
           </motion.div>
 
@@ -358,7 +396,7 @@ export default function BentoGrid({ eyebrow = "Features", cards, speedValue = "1
             </div>
             <div className="mt-4">
               <h3 className="font-serif text-xl text-white font-medium">{c6.title}</h3>
-              <p className="text-[#a9b4d6] text-sm mt-1">{c6.description}</p>
+              <CardDescription text={c6.description} />
             </div>
           </motion.div>
         </div>
