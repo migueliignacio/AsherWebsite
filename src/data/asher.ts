@@ -178,56 +178,6 @@ export const stats: Stat[] = [
   },
 ];
 
-export interface Tier {
-  id: string;
-  name: string;
-  /** MXN. Undefined until pricing is set; the cart shows "A cotizar". */
-  price?: number;
-  audience: string;
-  includes: string[];
-  featured?: boolean;
-}
-
-export const tiers: Tier[] = [
-  {
-    id: "emprende",
-    name: "ASHER Emprende",
-    audience: "Freelancers, startups y fundaciones.",
-    includes: [
-      "Naming e identidad de marca",
-      "Logo, paleta y manual de uso básico",
-      "Presencia digital inicial",
-      "Blindaje legal esencial (registro de marca)",
-    ],
-  },
-  {
-    id: "pyme",
-    name: "ASHER PYME",
-    audience: "Empresas formalizadas con menos de 70 colaboradores.",
-    featured: true,
-    includes: [
-      "Todo lo de ASHER Emprende",
-      "Estrategia de marketing y publicidad con seguimiento",
-      "Herramientas digitales y automatizaciones a medida",
-      "Blindaje legal integral (contratos, políticas, cumplimiento)",
-      "Retainer mensual con un solo punto de contacto",
-    ],
-  },
-  {
-    id: "corporativo",
-    name: "ASHER Corporativo",
-    audience:
-      "Empresas de 70+ colaboradores, sector público y grupos empresariales.",
-    includes: [
-      "Todo lo de ASHER PYME",
-      "Equipo dedicado y tiempos de respuesta prioritarios",
-      "Estructura corporativa y operaciones M&A",
-      "Cumplimiento regulatorio avanzado",
-      "Reportes ejecutivos y KPIs a medida",
-    ],
-  },
-];
-
 /** Propuestas de valor repetidas a lo largo del sitio. */
 export const valueProps = [
   "Todo bajo un mismo techo",

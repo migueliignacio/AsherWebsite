@@ -10,6 +10,7 @@ import Footer from "@/components/Footer";
 import { LeadModalProvider } from "@/components/LeadModalProvider";
 import { CartProvider } from "@/components/CartProvider";
 import CartDrawer from "@/components/CartDrawer";
+import AshiChat from "@/components/AshiChat";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
             <ImpactBadge />
             <CartDrawer />
+            <AshiChat />
           </CartProvider>
         </LeadModalProvider>
       </body>

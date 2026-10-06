@@ -11,7 +11,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { cartMessage, useCart } from "./CartProvider";
+import { cartMessage, useCart, type CartItem } from "./CartProvider";
 import { useLeadModal } from "./LeadModalProvider";
 import { currency, formatPrice } from "@/lib/currency";
 
@@ -106,7 +106,7 @@ function CartGroup({
   onRemove,
 }: {
   title: string;
-  entries: { id: string; title: string; price?: number; unit?: string; priceFrom?: boolean; area: string }[];
+  entries: CartItem[];
   onRemove: (id: string) => void;
 }) {
   return (
@@ -118,6 +118,11 @@ function CartGroup({
             <span className="min-w-0">
               <span className="block truncate font-medium">{e.title}</span>
               <span className="block text-xs text-[var(--color-ink-soft)]">{e.area}</span>
+              {e.removed?.length ? (
+                <span className="mt-1 block text-xs text-[var(--color-ink-soft)]">
+                  Sin: {e.removed.map((r) => r.title).join(", ")}
+                </span>
+              ) : null}
             </span>
             <span className="flex shrink-0 items-center gap-3">
               <span className="text-right font-medium">{e.price === undefined ? "A cotizar" : formatPrice({ ...e, price: e.price })}</span>

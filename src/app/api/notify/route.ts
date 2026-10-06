@@ -5,12 +5,11 @@ import { getSupabase } from "@/lib/supabase-server";
 /**
  * Runs on every submission from the lead modal ("Cuéntanos un poco sobre
  * ti" — see LeadModalProvider.tsx) and the 3-step diagnóstico (see
- * DiagnosticoQuiz.tsx): emails the team and saves a row in Supabase (see
- * supabase/schema.sql for the table).
+ * DiagnosticoQuiz.tsx): emails the team, saves a row in Supabase (see
+ * supabase/schema.sql for the table) and sends a WhatsApp alert.
  *
- * Both are independent and best-effort — a missing RESEND_API_KEY or
- * Supabase env vars just skips that half; the visitor's submission is never
- * blocked by either one failing.
+ * All three are independent and best-effort — missing env vars just skip
+ * that channel; the visitor's submission is never blocked by one failing.
  */
 
 function esc(value: unknown): string {
@@ -169,6 +168,50 @@ async function sendEmail(data: Record<string, unknown>, isDiagnostico: boolean) 
   return { sent: true };
 }
 
+/** Plain-text summary for WhatsApp (WhatsApp formatting: *bold*). */
+function buildWhatsappText(data: Record<string, unknown>, isDiagnostico: boolean): string {
+  const lines = isDiagnostico
+    ? [
+        "*📋 Nuevo diagnóstico — ASHER*",
+        `*Negocio:* ${data.nombre_negocio ?? "—"}`,
+        `*Contacto:* ${data.contacto ?? "—"}`,
+        ...(Array.isArray(data.respuestas)
+          ? (data.respuestas as { pregunta: string; respuesta: string }[]).map((r) => `• ${r.pregunta}: ${r.respuesta}`)
+          : []),
+      ]
+    : [
+        "*🆕 Nuevo registro — ASHER*",
+        `*Nombre:* ${data.nombre ?? "—"}`,
+        `*Celular:* ${data.celular ?? "—"}`,
+        `*Correo:* ${data.correo || "—"}`,
+        ...(data.mensaje ? [`*Mensaje:* ${data.mensaje}`] : []),
+      ];
+  lines.push(`*Origen:* ${data.seccion_origen ?? "—"}`, fecha());
+  return lines.join("\n");
+}
+
+/**
+ * WhatsApp alert to the team's own number through CallMeBot's free API
+ * (the number must first activate it — CALLMEBOT_PHONE + CALLMEBOT_APIKEY).
+ */
+async function sendWhatsapp(data: Record<string, unknown>, isDiagnostico: boolean) {
+  const phone = process.env.CALLMEBOT_PHONE;
+  const apiKey = process.env.CALLMEBOT_APIKEY;
+  if (!phone || !apiKey) return { sent: false, reason: "missing_callmebot_config" };
+
+  const url = new URL("https://api.callmebot.com/whatsapp.php");
+  url.searchParams.set("phone", phone);
+  url.searchParams.set("text", buildWhatsappText(data, isDiagnostico));
+  url.searchParams.set("apikey", apiKey);
+
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const body = await response.text().catch(() => "");
+  if (!response.ok || /error|invalid/i.test(body)) {
+    return { sent: false, reason: `callmebot_${response.status}: ${body.replace(/<[^>]*>/g, " ").trim().slice(0, 200)}` };
+  }
+  return { sent: true };
+}
+
 async function saveToDatabase(data: Record<string, unknown>, isDiagnostico: boolean) {
   const supabase = getSupabase();
   if (!supabase) return { saved: false, reason: "missing_supabase_config" };
@@ -191,15 +234,17 @@ export async function POST(req: NextRequest) {
     const data = await req.json();
     const isDiagnostico = data.tipo === "diagnostico";
 
-    const [emailResult, dbResult] = await Promise.allSettled([
+    const [emailResult, dbResult, whatsappResult] = await Promise.allSettled([
       sendEmail(data, isDiagnostico),
       saveToDatabase(data, isDiagnostico),
+      sendWhatsapp(data, isDiagnostico),
     ]);
 
     return NextResponse.json({
       ok: true,
       email: emailResult.status === "fulfilled" ? emailResult.value : { sent: false, reason: "error" },
       database: dbResult.status === "fulfilled" ? dbResult.value : { saved: false, reason: "error" },
+      whatsapp: whatsappResult.status === "fulfilled" ? whatsappResult.value : { sent: false, reason: "error" },
     });
   } catch {
     return NextResponse.json({ ok: false });

@@ -1,11 +1,11 @@
-import { tiers } from "./asher";
+import { plans } from "./plans";
 import { serviceAddons } from "./service-addons";
 
 export interface CatalogEntry {
   id: string;
   title: string;
   description: string;
-  /** Undefined = "A cotizar" (plans until pricing is set). */
+  /** Undefined = "A cotizar" (a plan without a set price). */
   price?: number;
   unit?: string;
   priceFrom?: boolean;
@@ -28,14 +28,14 @@ for (const service of Object.values(serviceAddons)) {
   }
 }
 
-export const planId = (tierId: string) => `plan-${tierId}`;
+export const planId = (id: string) => `plan-${id}`;
 
-for (const tier of tiers) {
-  catalogById[planId(tier.id)] = {
-    id: planId(tier.id),
-    title: tier.name,
-    description: tier.audience,
-    price: tier.price,
+for (const plan of plans) {
+  catalogById[planId(plan.id)] = {
+    id: planId(plan.id),
+    title: plan.name,
+    description: plan.audience,
+    price: plan.price,
     kind: "plan",
     area: "Plan",
   };
